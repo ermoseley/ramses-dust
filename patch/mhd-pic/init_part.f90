@@ -1519,8 +1519,8 @@ subroutine fisher_yates_shuffle_fixed(np, np_cpu, proc_id, ids, seed_b)
    end if
  
    ! Initialize the ID array with sequential IDs
-   do ipart = 1, np
-      ids(i) = offset + ipart
+   do i = 1, np
+      ids(i) = offset + i
    end do
  
    ! Calculate a unique global seed for each processor
