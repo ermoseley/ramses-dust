@@ -1510,6 +1510,7 @@ subroutine fisher_yates_shuffle_fixed(np, np_cpu, proc_id, ids, seed_b)
    integer(i8b),dimension(1:ncpu),intent(in)::np_cpu
    integer, dimension(1:npartmax),intent(out) :: ids  ! Output shuffled particle IDs
    integer :: i, j, temp, offset, global_seed
+   integer :: seed(1)
    real(dp) :: rand_num
  
    ! Calculate offset based on processor ID
@@ -1525,9 +1526,9 @@ subroutine fisher_yates_shuffle_fixed(np, np_cpu, proc_id, ids, seed_b)
  
    ! Calculate a unique global seed for each processor
    global_seed = seed_b + proc_id
- 
+   seed(1) = global_seed
    ! Set the fixed random seed
-   call random_seed_fixed(global_seed)
+   call random_seed_fixed(seed)
  
    ! Perform the Fisher-Yates shuffle
    do i = 1, np
