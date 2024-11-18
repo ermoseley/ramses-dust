@@ -1510,7 +1510,7 @@ subroutine fisher_yates_shuffle_fixed(np, np_cpu, proc_id, ids, seed_b)
    integer(i8b),dimension(1:ncpu),intent(in)::np_cpu
    integer, dimension(1:npartmax),intent(out) :: ids  ! Output shuffled particle IDs
    integer :: i, j, temp, offset, global_seed
-   integer :: seed(4)
+   integer :: seed(8)
    real(dp) :: rand_num
  
    ! Calculate offset based on processor ID
@@ -1543,12 +1543,12 @@ subroutine fisher_yates_shuffle_fixed(np, np_cpu, proc_id, ids, seed_b)
  
  subroutine random_seed_fixed(seed)
    implicit none
-   integer, dimension(1:4), intent(in) :: seed
-   integer :: state(4), i
+   integer, dimension(1:8), intent(in) :: seed
+   integer :: state(8), i
  
    ! Generate a deterministic state array from the seed
-   do i = 1, 4
-      state(i) = mod(seed + i * 7919, 2147483647) ! Use a prime multiplier
+   do i = 1, 8
+      state(i) = mod(seed(1) + i * 7919, 2147483647) ! Use a prime multiplier
    end do
  
    ! Set the random number generator seed
