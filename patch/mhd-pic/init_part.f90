@@ -1498,7 +1498,7 @@ subroutine unit_vectors(nc,x,y,z)
 
 end subroutine unit_vectors
 
-subroutine fisher_yates_shuffle_fixed(npart, npart_cpu, myid, idp, seed_base)
+subroutine fisher_yates_shuffle_fixed(np, np_cpu, proc_id, ids, seed_b)
    use amr_commons
    use pm_commons
    use pm_parameters
@@ -1506,37 +1506,37 @@ subroutine fisher_yates_shuffle_fixed(npart, npart_cpu, myid, idp, seed_base)
    use mpi_mod
    implicit none
 
-   integer, intent(in) :: npart, myid, seed_base
-   integer(i8b),dimension(1:ncpu),intent(in)::npart_cpu
-   integer, dimension(1:npartmax),intent(out) :: idp  ! Output shuffled particle IDs
+   integer, intent(in) :: np, proc_id, seed_b
+   integer(i8b),dimension(1:ncpu),intent(in)::np_cpu
+   integer, dimension(1:npartmax),intent(out) :: ids  ! Output shuffled particle IDs
    integer :: i, j, temp, offset, global_seed
    real(dp) :: rand_num
  
    ! Calculate offset based on processor ID
    offset = 0
-   if (myid > 1) then
-      offset = npart_cpu(myid-1)
+   if (proc_id > 1) then
+      offset = np_cpu(proc_id-1)
    end if
  
    ! Initialize the ID array with sequential IDs
-   do ipart = 1, npart
-      idp(i) = offset + ipart
+   do ipart = 1, np
+      ids(i) = offset + ipart
    end do
  
    ! Calculate a unique global seed for each processor
-   global_seed = seed_base + myid
+   global_seed = seed_b + proc_id
  
    ! Set the fixed random seed
    call random_seed_fixed(global_seed)
  
    ! Perform the Fisher-Yates shuffle
-   do i = 1, npart
+   do i = 1, np
    !do i = npart, 2, -1
       call random_number(rand_num)
       j = int(rand_num * i) + 1
-      temp = idp(i)
-      idp(i) = idp(j)
-      idp(j) = temp
+      temp = ids(i)
+      ids(i) = ids(j)
+      ids(j) = temp
    end do
  end subroutine
  
