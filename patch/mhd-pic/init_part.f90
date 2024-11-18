@@ -20,7 +20,7 @@
   integer:: idu, icr, itr
   integer::i1,i2,i3
   integer::i1_min=0,i1_max=0,i2_min=0,i2_max=0,i3_min=0,i3_max=0
-  integer::buf_count,indglob
+  integer::buf_count,indglob, seed_base = 11011
   real(dp)::dx,xx1,xx2,xx3,vv1,vv2,vv3,mm1,s,q, euler_e=2.718281828459045
   real(dp)::min_mdm_cpu,min_mdm_all
   real(dp),dimension(1:twotondim,1:3)::xc
@@ -1126,6 +1126,7 @@ contains
       do icpu=2,ncpu
          npart_cpu(icpu)=npart_cpu(icpu-1)+npart_all(icpu)
       end do
+      ! This is where you need to do something to change the particle IDs in some sort of random way. 
       if(myid==1)then
          do ipart=1,npart
             idp(ipart)=ipart
@@ -1135,6 +1136,10 @@ contains
             idp(ipart)=npart_cpu(myid-1)+ipart
          end do
       end if
+
+      if(shuffled_ids)then
+         call fisher_yates_shuffle_fixed(npart, npart_cpu, myid, idp, seed_base)
+      endif 
     end if
 
   end subroutine load_grafic
@@ -1492,3 +1497,60 @@ subroutine unit_vectors(nc,x,y,z)
   endif
 
 end subroutine unit_vectors
+
+subroutine fisher_yates_shuffle_fixed(npart, npart_cpu, myid, idp, seed_base)
+   use amr_commons
+   use pm_commons
+   use pm_parameters
+   use clfind_commons
+   use mpi_mod
+   implicit none
+
+   integer, intent(in) :: npart, myid, seed_base
+   integer(i8b),dimension(1:ncpu),intent(in)::npart_cpu
+   integer, dimension(1:npartmax),intent(out) :: idp  ! Output shuffled particle IDs
+   integer :: i, j, temp, offset, global_seed
+   real(dp) :: rand_num
+ 
+   ! Calculate offset based on processor ID
+   offset = 0
+   if (myid > 1) then
+      offset = npart_cpu(myid-1)
+   end if
+ 
+   ! Initialize the ID array with sequential IDs
+   do ipart = 1, npart
+      idp(i) = offset + ipart
+   end do
+ 
+   ! Calculate a unique global seed for each processor
+   global_seed = seed_base + myid
+ 
+   ! Set the fixed random seed
+   call random_seed_fixed(global_seed)
+ 
+   ! Perform the Fisher-Yates shuffle
+   do i = 1, npart
+   !do i = npart, 2, -1
+      call random_number(rand_num)
+      j = int(rand_num * i) + 1
+      temp = idp(i)
+      idp(i) = idp(j)
+      idp(j) = temp
+   end do
+ end subroutine
+ 
+ subroutine random_seed_fixed(seed)
+   implicit none
+   integer, intent(in) :: seed
+   integer :: state(4), i
+ 
+   ! Generate a deterministic state array from the seed
+   do i = 1, 4
+      state(i) = mod(seed + i * 7919, 2147483647) ! Use a prime multiplier
+   end do
+ 
+   ! Set the random number generator seed
+   call random_seed(put=state)
+ end subroutine
+ 

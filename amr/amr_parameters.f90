@@ -208,7 +208,8 @@ peed.
   real(dp):: charge_slope=0.0         ! Determines how the grain charge scales with grain size (power law option). Should be \
 negative.                                                                                                                     
   real(dp):: gyrofactor=0.1         ! Timesteps per Larmor time of the smallest grains.                                       
-  logical :: real_ids=.false.         ! Should set to true for ids that are initially real numbers.                           
+  logical :: real_ids=.false.         ! Should set to true for ids that are initially real numbers.   
+  logical :: shuffled_ids=.false.    ! Shuffles the particle IDs so that you have uniformly distributed grain properties in space.                        
   integer:: grain_sampling_rate=1 ! For use with size_bins. Makes a grid in charge-drag space when greater than 1. Must divid\
 e ndust evenly.                                                                                                               
   logical :: lognormal = .false.   ! Creates a log-normal grain distribution from +2*sigma to -2*sigma centered at grain_size\
