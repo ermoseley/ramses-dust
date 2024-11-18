@@ -1141,7 +1141,7 @@ contains
       if(shuffled_ids)then
          nparttot=int(ndust*2.0d0**(3*levelmin)-1.0d0)
          do ipart=1,npart
-            idp(ipart)= mod(6364136223846793061*ipart + 1442695040888963407,nparttot)
+            idp(ipart)= mod(63641371*ipart + 1442695049,nparttot)
          end do
          call fisher_yates_shuffle_fixed(npart, npart_cpu, myid, idp, seed_base)
       endif 
