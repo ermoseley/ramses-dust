@@ -956,8 +956,6 @@ end subroutine init_ids
                               mp(ipart)=0.5d0**(3*ilevel) * init_array_m(i1,i2,i3)
                             endif
                           endif
-                      end if
-
                    end do
                 end do
                 ! End loop over cells
