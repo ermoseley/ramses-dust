@@ -331,6 +331,7 @@ subroutine init_ids
             ! End loop over cells
          end do
          ! End loop over grids
+      end do
    npart = ipart 
 
    npart_cpu=0; npart_all=0
