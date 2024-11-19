@@ -1216,21 +1216,19 @@ end subroutine init_ids
 #endif
 
     ! Compute particle initial level
-   do ipic=1,npic
-    do ipart=1,npart
+    do ipart=1,npart*npic
        levelp(ipart)=levelmin
     end do
 
     ! Compute particle initial age and metallicity
     if(star.or.sink)then
-       do ipart=1,npart
+       do ipart=1,npart*npic
           tp(ipart)=0d0
           if(metal)then
              zp(ipart)=0d0
           end if
        end do
     end if
-   end do
 
    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
    ! Now this is computed at the beginning of load_grafic.
