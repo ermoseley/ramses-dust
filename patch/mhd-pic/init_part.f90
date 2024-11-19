@@ -264,6 +264,111 @@
 
 contains
 
+
+subroutine init_ids
+   ! If you want to shuffle the IDs internally rather than
+   ! read shuffled IDs from a file, you'll end up using this routine. 
+   ! There may be some unnecessary stuff in here. We'll trim it down with time.
+
+   integer::nxny,nx_loc,trdim,ii
+   real(dp),dimension(1:3)::xbound
+   real(dp),dimension(1:3)::skip_loc,phi3a
+   real(dp)::scale
+
+   ! Local constants
+   nxny=nx*ny
+   xbound(1:3)=(/dble(nx),dble(ny),dble(nz)/)
+   nx_loc=(icoarse_max-icoarse_min+1)
+   skip_loc=(/0.0d0,0.0d0,0.0d0/)
+   if(ndim>0)skip_loc(1)=dble(icoarse_min)
+   if(ndim>1)skip_loc(2)=dble(jcoarse_min)
+   if(ndim>2)skip_loc(3)=dble(kcoarse_min)
+   scale=boxlen/dble(nx_loc)
+
+   ntr = 0
+   if (pic.and.tracer) ntr = ntracer ! set in the tracer_params block of the namelist
+
+   npic=1
+   if (pic .and. (pic_dust .or. pic_cr .or. tracer)) npic = ndust + ncr + ntr
+
+   if(myid==1)write(*,*)'initializing IDs'
+   ipart = 0
+      do ilevel=levelmin,nlevelmax
+   
+         if(initfile(ilevel)==' ')cycle
+   
+         !--------------------------------------------------------------
+         ! Compute npart
+         !--------------------------------------------------------------
+         ipart_old=ipart
+   
+         ! Loop over grids by vector sweeps
+         ncache=active(ilevel)%ngrid
+         do igrid=1,ncache,nvector
+            ngrid=MIN(nvector,ncache-igrid+1)
+            do i=1,ngrid
+               ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+            end do
+   
+            ! Loop over cells
+            do ind=1,twotondim
+               iskip=ncoarse+(ind-1)*ngridmax
+               do i=1,ngrid
+                  ind_cell(i)=iskip+ind_grid(i)
+               end do
+               do i=1,ngrid
+                  keep_part=son(ind_cell(i))==0
+                  if(keep_part)then
+                     ipart=ipart+1
+                     if(ipart>npartmax)then
+                        write(*,*)'Maximum number of particles incorrect'
+                        write(*,*)'npartmax should be greater than',ipart
+                        call clean_stop
+                     endif
+                  end if
+               end do
+            end do
+            ! End loop over cells
+         end do
+         ! End loop over grids
+   npart = ipart 
+
+   npart_cpu=0; npart_all=0
+   npart_cpu(myid)=npart
+#ifndef WITHOUTMPI
+#ifndef LONGINT
+   call MPI_ALLREDUCE(npart_cpu,npart_all,ncpu,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,info)
+#else
+   call MPI_ALLREDUCE(npart_cpu,npart_all,ncpu,MPI_INTEGER8,MPI_SUM,MPI_COMM_WORLD,info)
+#endif
+   npart_cpu(1)=npart_all(1)
+#endif
+   do icpu=2,ncpu
+      npart_cpu(icpu)=npart_cpu(icpu-1)+npart_all(icpu)
+   end do
+   ! There will be npart*npic particles on each processor.
+   ! We want to make sure that things are cyclic here.
+   ipart = 0
+   do ipic=1, npic 
+      do ii=1,npart
+         ipart=ipart+1
+         if(myid==1)then
+               idp(ipart) = ii + (ipic-1)*2**(3*levelmin)
+         else
+               idp(ipart) = ii + npart_cpu(myid-1) + (ipic-1)*2**(3*levelmin)
+         end if
+      end do
+   end do
+
+   if (shuffled_ids)then ! WORKBLOCK, ISSUE HERE, FIGURE THIS OUT
+      do ipart=1,npart
+         idp(ipart) = 1 + mod(63641371*idp(ipart) + 1442695049,2**(3*levelmin)) + (ipic-1)*2**(3*levelmin)
+      end do
+      ! call fisher_yates_shuffle_fixed(npart, npart_cpu, myid, idp, seed_base)
+   endif 
+
+end subroutine init_ids
+
   subroutine load_grafic
     ! Read data in the grafic format. The particle type is derived
     ! following conversion rules (see pm_commons:props2type)
@@ -315,6 +420,11 @@ contains
     crsol=cr_c_fraction*2.9979246d+10*units_time/units_length ! Reduced speed of light.
     if(myid==1.and.pic_cr)write(*,*)"reduced sp. o' light = ",crsol
     if(myid==1.and.pic_cr)write(*,*)"reduced sp. o' light(cgs) = ",crsol*units_length/units_time
+
+    ! Precompute IDs (Shuffled, though not with the fisher-yates shuffle just yet. Need to figure out more about how to do that.)
+
+    call init_ids
+
     !----------------------------------------------------
     ! Reading initial conditions GRAFIC2 multigrid arrays
     !----------------------------------------------------
@@ -414,6 +524,13 @@ contains
        if(debug)then
           write(*,*)myid,i1_min,i1_max,i2_min,i2_max,i3_min,i3_max
        endif
+
+
+       ! First and a half step: compute particle IDs for use in computing other things later on.
+       ! Yes, that means you'll have to 
+
+
+
 
        !---------------------------------------------------------------------
        ! Second step: read initial condition file and set particle velocities
@@ -692,7 +809,7 @@ contains
                       i2=int(xx2)+1
                       i3=int(xx3)+1
                       i3=int(xx3)+1
-                      keep_part=son(ind_cell(i))==0 ! ERM: somehow, this line is keeping me from reading in the IDs of 552 particles.
+                      keep_part=son(ind_cell(i))==0 
                       if(keep_part)then
                          ipart=ipart+1
                          ! Assign cosmic ray 4-velocities. Not yet done..
@@ -709,7 +826,9 @@ contains
                           endif ! moved this endif from previously being below the if(read_mass).
                           if (read_ids) then
                             idp(ipart) = init_array_id(i1,i2,i3) + (ipic-1)*2**(3*levelmin)
-                          end if
+                          endif
+                       endif 
+
                           ! decide on particle types
                           if (ipic .le. ndust) then
                             idu = ipic
@@ -1098,6 +1217,7 @@ contains
 #endif
 
     ! Compute particle initial level
+   do ipic=1,npic
     do ipart=1,npart
        levelp(ipart)=levelmin
     end do
@@ -1111,41 +1231,38 @@ contains
           end if
        end do
     end if
+   end do
 
-    ! Compute particle initial identity
-    if(.not.read_ids) then
-      npart_cpu=0; npart_all=0
-      npart_cpu(myid)=npart
-#ifndef WITHOUTMPI
-#ifndef LONGINT
-      call MPI_ALLREDUCE(npart_cpu,npart_all,ncpu,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,info)
-#else
-      call MPI_ALLREDUCE(npart_cpu,npart_all,ncpu,MPI_INTEGER8,MPI_SUM,MPI_COMM_WORLD,info)
-#endif
-      npart_cpu(1)=npart_all(1)
-#endif
-      do icpu=2,ncpu
-         npart_cpu(icpu)=npart_cpu(icpu-1)+npart_all(icpu)
-      end do
-      ! This is where you need to do something to change the particle IDs in some sort of random way. 
-      if(myid==1)then
-         do ipart=1,npart
-            idp(ipart)=ipart
-         end do
-      else
-         do ipart=1,npart
-            idp(ipart)=npart_cpu(myid-1)+ipart
-         end do
-      end if
-
-      if(shuffled_ids)then
-         nparttot=int(ndust*2.0d0**(3*levelmin)-1.0d0)
-         do ipart=1,npart
-            idp(ipart)= mod(63641371*ipart + 1442695049,nparttot)
-         end do
-         call fisher_yates_shuffle_fixed(npart, npart_cpu, myid, idp, seed_base)
-      endif 
-    end if
+   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+   ! Now this is computed at the beginning of load_grafic.
+   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!     ! Compute particle initial identity
+!     if(.not.read_ids) then
+!       npart_cpu=0; npart_all=0
+!       npart_cpu(myid)=npart
+! #ifndef WITHOUTMPI
+! #ifndef LONGINT
+!       call MPI_ALLREDUCE(npart_cpu,npart_all,ncpu,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,info)
+! #else
+!       call MPI_ALLREDUCE(npart_cpu,npart_all,ncpu,MPI_INTEGER8,MPI_SUM,MPI_COMM_WORLD,info)
+! #endif
+!       npart_cpu(1)=npart_all(1)
+! #endif
+!       do icpu=2,ncpu
+!          npart_cpu(icpu)=npart_cpu(icpu-1)+npart_all(icpu)
+!       end do
+!       do ipic=1, npic
+!          if(myid==1)then
+!             do ipart=1,npart
+!                idp(ipart)=ipart
+!             end do
+!          else
+!             do ipart=1,npart
+!                idp(ipart)=npart_cpu(myid-1)+ipart + (ipic-1)*2**(3*levelmin)
+!             end do
+!          end if
+!       end do
+!     end if
 
   end subroutine load_grafic
 
@@ -1504,6 +1621,11 @@ subroutine unit_vectors(nc,x,y,z)
 end subroutine unit_vectors
 
 subroutine fisher_yates_shuffle_fixed(np, np_cpu, proc_id, ids, seed_b)
+   ! Within each processor, this will shuffle around (randomly swap)
+   ! the IDs of particles. This keeps particle IDs unique while also
+   ! ensuring that we erase any coherent structures introduced by 
+   ! our decision to introduce large-scale randomness with what is
+   ! essentially a Weyl sequence (or really, LCG)
    use amr_commons
    use pm_commons
    use pm_parameters
@@ -1518,16 +1640,16 @@ subroutine fisher_yates_shuffle_fixed(np, np_cpu, proc_id, ids, seed_b)
    integer :: seed(8)
    real(dp) :: rand_num
  
-   ! Calculate offset based on processor ID
-   offset = 0
-   if (proc_id > 1) then
-      offset = np_cpu(proc_id-1)
-   end if
+   ! ! Calculate offset based on processor ID
+   ! offset = 0
+   ! if (proc_id > 1) then
+   !    offset = np_cpu(proc_id-1)
+   ! end if
  
-   ! Initialize the ID array with sequential IDs
-   do i = 1, np
-      ids(i) = offset + i
-   end do
+   ! ! Initialize the ID array with sequential IDs
+   ! do i = 1, np
+   !    ids(i) = offset + i
+   ! end do
  
    ! Calculate a unique global seed for each processor
    global_seed = seed_b + proc_id
