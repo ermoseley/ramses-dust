@@ -1216,7 +1216,7 @@ end subroutine init_ids
 #endif
 
     ! Compute particle initial level
-    do ipart=1,npart*npic
+    do ipart=1,npart ! *npic?
        levelp(ipart)=levelmin
     end do
 
